@@ -36,6 +36,7 @@ interface Replacement {
 
 export interface ConvertReport {
 	notesScanned: number;
+	/** Number of references considered as attachment candidates (i.e., look like files we support). */
 	refsFound: number;
 	refsRemoteSkipped: number;
 	refsUnresolved: number;
@@ -60,6 +61,28 @@ function isProbablyRemoteLink(target: string): boolean {
 		t.startsWith("mailto:") ||
 		t.startsWith("file:")
 	);
+}
+
+function extractExtFromTarget(target: string): string | null {
+	// Strip fragment/query
+	const t = target.split("#")[0].split("?")[0].trim();
+	// Ignore folder-only / empty
+	if (!t) return null;
+	// Get last path segment
+	const last = t.split("/").pop() ?? t;
+	const dot = last.lastIndexOf(".");
+	if (dot === -1) return null;
+	const ext = last.slice(dot + 1).toLowerCase();
+	if (!ext) return null;
+	return ext;
+}
+
+function isAttachmentCandidate(target: string): boolean {
+	const ext = extractExtFromTarget(target);
+	if (!ext) return false;
+	// Don't treat markdown notes as attachments
+	if (ext === "md") return false;
+	return mimeType.includeEXT(ext);
 }
 
 /**
@@ -322,7 +345,9 @@ export async function convertAttachments(plugin: ObsidianS3, opts: ConvertAttach
 	for (const note of scopeFiles) {
 		report.notesScanned += 1;
 		const content = await vault.read(note);
-		const refs = extractAttachmentRefs(content);
+		// Only consider refs that look like supported attachment files.
+		// This avoids treating normal [[note links]] / .md links as "attachments".
+		const refs = extractAttachmentRefs(content).filter((r) => isAttachmentCandidate(r.target));
 		report.refsFound += refs.length;
 
 		const replacements: Replacement[] = [];
