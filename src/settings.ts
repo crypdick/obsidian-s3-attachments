@@ -53,15 +53,23 @@ export interface S3ClientSettings {
 	endPoint: string;
 	folderName: string;
 	bucketName: string;
+	/**
+	 * Optional base URL for public object access.
+	 * Example (AWS): https://your-bucket-name.s3.us-east-1.amazonaws.com
+	 * Example (custom): https://cdn.example.com
+	 */
+	publicBaseUrl?: string;
 	id: string;
 }
 
+export type LinkMode = 'proxy' | 'public';
 
 export interface IObsidianSetting {
 	clients: S3ClientSettings[];
 	port: string;
 	activeClient: string;
 	rawMIME: string;
+	linkMode: LinkMode;
 }
 
 export const DEFAULT_CLIENT: S3ClientSettings = {
@@ -70,6 +78,7 @@ export const DEFAULT_CLIENT: S3ClientSettings = {
 	endPoint: "",
 	folderName: "obsidian",
 	bucketName: "",
+	publicBaseUrl: "",
 	id: "default"
 };
 
@@ -77,6 +86,7 @@ export const DEFAULT_SETTINGS: IObsidianSetting = {
 	clients: [DEFAULT_CLIENT],
 	port: '4998',
 	activeClient: 'default',
+	linkMode: 'proxy',
 	rawMIME: `
 	img, ico, image/x-icon
 	img, png, image/png
@@ -219,7 +229,33 @@ export class SettingsTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
+		new Setting(containerEl)
+			.setName('Public Base URL (optional)')
+			.setDesc('If set and Link mode = Public, links will be written as: <base>/<folder>/<file>')
+			.addText(text => text
+				.setPlaceholder('https://your-bucket-name.s3.us-east-1.amazonaws.com')
+				.setValue(this.plugin.getActive().publicBaseUrl ?? '')
+				.onChange(async (value) => {
+					this.plugin.getActive().publicBaseUrl = value.trim();
+					await this.plugin.saveSettings();
+				}));
+
 		containerEl.createEl('h3', { text: 'Misc.' });
+		new Setting(containerEl)
+			.setName('Link mode')
+			.setDesc('How links are written into notes after upload.')
+			.addDropdown((c) => {
+				c.addOptions({
+					proxy: 'Local proxy (http://localhost:PORT/...)',
+					public: 'Public URL (https://.../folder/file)'
+				})
+					.setValue(settings.linkMode ?? 'proxy')
+					.onChange(async (v) => {
+						settings.linkMode = v as LinkMode;
+						await this.plugin.saveSettings();
+					});
+			});
+
 		new Setting(containerEl).addButton((c) => {
 			c.setButtonText("Reload")
 				.onClick(async () => {

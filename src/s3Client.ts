@@ -73,6 +73,15 @@ export class S3Client {
 		return url;
 	}
 
+	public createPublicURL(fileName: string, publicBaseUrl?: string): string | null {
+		if (!publicBaseUrl) return null;
+		const base = publicBaseUrl.replace(/\/+$/, '');
+		const path = `${this.folderName}/${fileName}`.replace(/^\/+/, '');
+		// Avoid encodeURI on the full URL because it won't encode all path segments correctly.
+		// Encode only the path portion.
+		return `${base}/${encodeURI(path)}`;
+	}
+
 	public async getBucketSize(includeNonObsidian?: boolean) {
 		return (await this.listObjects(includeNonObsidian)).map((i) => i.size).reduce((p, c) => p + c);
 	}

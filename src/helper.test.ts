@@ -18,17 +18,17 @@ describe('matchS3URLs()', () => {
 
 	it('should match object url.', () => {
 		const content = `${url}`;
-		expect(matchS3URLs(content, domain)).toStrictEqual([url]);
+		expect(matchS3URLs(content, [domain])).toStrictEqual([url]);
 	});
 
 	it('should not match anything else', () => {
 		const content = `hey brother\n#theres an endless road to re-discover\n##References\n- ![](${url})`;
-		expect(matchS3URLs(content, domain)).toStrictEqual([url]);
+		expect(matchS3URLs(content, [domain])).toStrictEqual([url]);
 	});
 
 	it('should match exhaustively', () => {
 		const content = `![](${url})\n <iframe src="${url}">\n ${url} ${url}\n [${url}]`;
-		expect(matchS3URLs(content, domain)).toStrictEqual([url, url, url, url, url]);
+		expect(matchS3URLs(content, [domain])).toStrictEqual([url, url, url, url, url]);
 
 	});
 });

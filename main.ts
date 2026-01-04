@@ -42,7 +42,7 @@ function isValidSettings(settings: IObsidianSetting) {
 
 function createClients(clientSettings: S3ClientSettings[]) {
 	const s3: S3Client[] = [];
-	settings.clients.forEach((c) => {
+	clientSettings.forEach((c) => {
 		s3.push(new S3Client(c.endPoint, c.accessKey, c.secretKey, c.bucketName, c.folderName, c.id));
 	});
 	return s3;
@@ -55,9 +55,8 @@ export default class ObsidianS3 extends Plugin {
 	get s3() {
 		return server.getClient(settings.activeClient);
 	}
-	credentialsError() {
+	credentialsError(): void {
 		new Notice("Please fill out S3 credentials to enable the Obsidian S3 plugin.");
-		return true;
 	}
 	getActive() {
 		const res = settings.clients.find((c) => c.id === settings.activeClient);
@@ -69,7 +68,7 @@ export default class ObsidianS3 extends Plugin {
 		return settings.clients.map((c) => c.id);
 	}
 
-	async onload() {
+	async onload(): Promise<void> {
 		console.log(`Loading ${this.pluginName}`);
 		await this.loadSettings();
 
@@ -97,7 +96,8 @@ export default class ObsidianS3 extends Plugin {
 			});
 
 		} else {
-			return this.credentialsError();
+			this.credentialsError();
+			return;
 		}
 	}
 
@@ -106,25 +106,42 @@ export default class ObsidianS3 extends Plugin {
 		const files = vault.getMarkdownFiles();
 
 		new Notice('Indexing resources...');
-		const obsidianUrls = (await getS3URLs(files, vault, server.url)).map((u) => new URL(u));
+		const baseUrls = [
+			server.url,
+			...settings.clients.map((c) => (c.publicBaseUrl ?? '').replace(/\/+$/, '')).filter(Boolean),
+		];
+		const obsidianUrls = (await getS3URLs(files, vault, baseUrls)).map((u) => new URL(u));
 
 		const ids = this.getClientIDs();
 		for (let i = 0; i < ids.length; i++) {
 			const id = ids[i];
 			new Notice(`[${id}] Indexing S3 objects...`);
-			const filter = obsidianUrls.filter((u) => u.searchParams.get("client") === id).map((u) => getS3Path(u));
+			const clientCfg = settings.clients.find((c) => c.id === id);
+			const publicBase = (clientCfg?.publicBaseUrl ?? '').replace(/\/+$/, '');
+			const filter = obsidianUrls
+				.filter((u) => {
+					// Proxy links: identify by client query param
+					const client = u.searchParams.get("client");
+					if (client) return client === id;
+					// Public links: identify by matching base URL
+					if (!publicBase) return false;
+					return u.toString().startsWith(publicBase + '/');
+				})
+				.map((u) => getS3Path(u));
 
 			const s3 = server.getClient(id);
 			const s3Index = await s3.listObjects();
-			const doDelete = s3Index.filter((i) => !filter.includes(i.name));
+			const doDelete = s3Index.filter(
+				(i): i is typeof i & { name: string } => !!i.name && !filter.includes(i.name)
+			);
 			if (doDelete.length === 0) {
 				new Notice(`[${id}] No object to delete.`);
 				continue;
 			}
 			new Notice(`[${id}] Found ${doDelete.length} un-used objects, deleting...`);
 			for (let y = 0; y < doDelete.length; y++) {
-				console.log(`[${id}] S3: Deleting ${doDelete[i].name}`);
-				await this.s3.removeObject(doDelete[i].name);
+				console.log(`[${id}] S3: Deleting ${doDelete[y].name}`);
+				await s3.removeObject(doDelete[y].name);
 			}
 			new Notice(`[${id}] Deleted ${doDelete.length} objects.`);
 			new Notice(`[${id}] Current bucket size ${prettyBytes(await s3.getBucketSize())}`);
@@ -237,7 +254,16 @@ export default class ObsidianS3 extends Plugin {
 				(prog) => progress = prog,
 				() => window.clearInterval(handle));
 
-			const url = s3.createObjURL(server.url, fileName);
+			let url: string | null = null;
+			if (settings.linkMode === 'public') {
+				url = s3.createPublicURL(fileName, this.getActive().publicBaseUrl);
+				if (!url) {
+					new Notice('S3: Public link mode is enabled but "Public Base URL" is not set. Falling back to local proxy links.');
+				}
+			}
+			if (!url) {
+				url = s3.createObjURL(server.url, fileName);
+			}
 
 			let linkTxt = `![S3 File](${url})`;
 			const method = mimeType.getMethod(file.type);

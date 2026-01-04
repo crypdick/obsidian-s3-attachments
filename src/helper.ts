@@ -7,21 +7,28 @@ export function getS3Path(res: string | URL): string {
 	return decodeURI(res.pathname).slice(1);
 }
 
-export function matchS3URLs(content: string, url: string): string[] | null {
-	const reg = new RegExp(`${url}\\/[^"\\]\\)\\s]*`, 'g');
-	if (!content.match(url)) return null;
-	return content.match(reg);
+function escapeRegExp(s: string) {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export async function getS3URLs(files: TFile[], vault: Vault, url: string): Promise<string[]> {
+export function matchS3URLs(content: string, baseUrls: string[]): string[] {
+	const out: string[] = [];
+	for (const baseUrl of baseUrls) {
+		if (!baseUrl) continue;
+		const safe = escapeRegExp(baseUrl.replace(/\/+$/, ''));
+		const reg = new RegExp(`${safe}\\/[^"\\]\\)\\s]*`, 'g');
+		const matches = content.match(reg);
+		if (matches) out.push(...matches);
+	}
+	return out;
+}
+
+export async function getS3URLs(files: TFile[], vault: Vault, baseUrls: string[]): Promise<string[]> {
 	const obsidianIndex: string[] = [];
 
 	for (let i = 0; i < files.length; i++) {
 		const content = await vault.read(files[i]);
-		const urls = matchS3URLs(content, url);
-		if (urls) {
-			obsidianIndex.push(...urls);
-		}
+		obsidianIndex.push(...matchS3URLs(content, baseUrls));
 	}
 
 	return [...new Set(obsidianIndex)];
