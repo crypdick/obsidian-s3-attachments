@@ -5,6 +5,7 @@ import { mimeType } from 'src/settings';
 import { S3Client } from 'src/s3Client';
 import prettyBytes from 'pretty-bytes';
 import { buf2hex, generateResourceName, getS3Path, getS3URLs } from 'src/helper';
+import { ConvertAttachmentsModal } from 'src/convertAttachmentsModal';
 
 
 function allFilesAreValidUploads(files: FileList) {
@@ -73,6 +74,36 @@ export default class ObsidianS3 extends Plugin {
 		await this.loadSettings();
 
 		this.addSettingTab(new SettingsTab(this.app, this));
+
+		// Conversion commands should always be available, even if credentials are missing.
+		// The modal and conversion flow handle missing S3 config gracefully.
+		this.addCommand({
+			id: 's3-convert-attachments-current-note',
+			name: 'Convert attachments in current note',
+			callback: () => new ConvertAttachmentsModal(this.app, this, {
+				scope: 'current-note',
+				dryRun: true,
+				linkMode: settings.linkMode,
+			}).open(),
+		});
+		this.addCommand({
+			id: 's3-convert-attachments-current-folder',
+			name: 'Convert attachments in current folder',
+			callback: () => new ConvertAttachmentsModal(this.app, this, {
+				scope: 'current-folder',
+				dryRun: true,
+				linkMode: settings.linkMode,
+			}).open(),
+		});
+		this.addCommand({
+			id: 's3-convert-attachments-entire-vault',
+			name: 'Convert attachments in entire vault',
+			callback: () => new ConvertAttachmentsModal(this.app, this, {
+				scope: 'entire-vault',
+				dryRun: true,
+				linkMode: settings.linkMode,
+			}).open(),
+		});
 
 		this.setupHandlers();
 		if (this.tryStartService()) {
