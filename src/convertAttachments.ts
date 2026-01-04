@@ -11,7 +11,8 @@ export interface ConvertAttachmentsOptions {
 	makeBackup: boolean;
 	linkMode: "proxy" | "public";
 	deleteOriginal: boolean;
-	deleteOnlyIfUniqueInScope: boolean;
+	/** Only delete local files that are not referenced by notes outside the chosen scope. */
+	deleteOnlyIfNoExternalRefs: boolean;
 }
 
 type RefKind = "obsidian-embed" | "obsidian-link" | "md-embed" | "md-link";
@@ -51,7 +52,7 @@ export interface ConvertReport {
 	linksRewritten: number;
 	backupCreated: number;
 	attachmentsDeleted: number;
-	deletesSkippedNotUnique: number;
+	deletesSkippedReferencedOutsideScope: number;
 	deletesSkippedNotVerified: number;
 	deletesFailed: number;
 	errors: string[];
@@ -346,6 +347,10 @@ function buildTargetUrl(plugin: ObsidianS3, fileName: string, linkMode: "proxy" 
 	return s3.createObjURL(server.url, fileName);
 }
 
+async function buildUsageCountsInVault(app: App): Promise<Map<string, number>> {
+	return buildUsageCountsInScope(app, app.vault.getMarkdownFiles());
+}
+
 export async function convertAttachments(plugin: ObsidianS3, opts: ConvertAttachmentsOptions): Promise<ConvertReport> {
 	const report: ConvertReport = {
 		notesScanned: 0,
@@ -361,7 +366,7 @@ export async function convertAttachments(plugin: ObsidianS3, opts: ConvertAttach
 		linksRewritten: 0,
 		backupCreated: 0,
 		attachmentsDeleted: 0,
-		deletesSkippedNotUnique: 0,
+		deletesSkippedReferencedOutsideScope: 0,
 		deletesSkippedNotVerified: 0,
 		deletesFailed: 0,
 		errors: [],
@@ -380,9 +385,14 @@ export async function convertAttachments(plugin: ObsidianS3, opts: ConvertAttach
 	}
 
 	const { vault, metadataCache } = plugin.app;
-	const usageCountByPath = opts.deleteOriginal && opts.deleteOnlyIfUniqueInScope && !opts.dryRun
-		? await buildUsageCountsInScope(plugin.app, scopeFiles)
-		: new Map<string, number>();
+	const scopeUsageCountByPath =
+		opts.deleteOriginal && opts.deleteOnlyIfNoExternalRefs && !opts.dryRun
+			? await buildUsageCountsInScope(plugin.app, scopeFiles)
+			: new Map<string, number>();
+	const vaultUsageCountByPath =
+		opts.deleteOriginal && opts.deleteOnlyIfNoExternalRefs && !opts.dryRun && opts.scope !== "entire-vault"
+			? await buildUsageCountsInVault(plugin.app)
+			: new Map<string, number>();
 
 	// De-dup uploads across the whole run: vaultPath -> remote url
 	const resolvedUrlByVaultPath = new Map<string, string>();
@@ -485,10 +495,13 @@ export async function convertAttachments(plugin: ObsidianS3, opts: ConvertAttach
 	// Deletions happen at the end so we don't break link resolution for later notes in the same run.
 	if (!opts.dryRun && opts.deleteOriginal) {
 		for (const [path, cand] of deleteCandidates) {
-			if (opts.deleteOnlyIfUniqueInScope) {
-				const n = usageCountByPath.get(path) ?? 0;
-				if (n !== 1) {
-					report.deletesSkippedNotUnique += 1;
+			if (opts.deleteOnlyIfNoExternalRefs) {
+				const scopeN = scopeUsageCountByPath.get(path) ?? 0;
+				const vaultN = opts.scope === "entire-vault" ? scopeN : (vaultUsageCountByPath.get(path) ?? 0);
+				// If the file is referenced more times in the whole vault than in the chosen scope,
+				// then it's referenced outside scope and we must not delete it.
+				if (vaultN > scopeN) {
+					report.deletesSkippedReferencedOutsideScope += 1;
 					continue;
 				}
 			}

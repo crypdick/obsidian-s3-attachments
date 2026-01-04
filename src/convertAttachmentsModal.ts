@@ -53,7 +53,7 @@ export class ConvertAttachmentsModal extends Modal {
 			makeBackup: preset?.makeBackup ?? true,
 			linkMode: preset?.linkMode ?? "proxy",
 			deleteOriginal: preset?.deleteOriginal ?? false,
-			deleteOnlyIfUniqueInScope: preset?.deleteOnlyIfUniqueInScope ?? true,
+			deleteOnlyIfNoExternalRefs: preset?.deleteOnlyIfNoExternalRefs ?? true,
 		};
 	}
 
@@ -101,12 +101,12 @@ export class ConvertAttachmentsModal extends Modal {
 			});
 
 		new Setting(contentEl)
-			.setName("Only delete if unique in scope")
-			.setDesc("Conservative safety check: only delete a file if it's referenced exactly once within the chosen scope.")
+			.setName("Only delete if not referenced outside scope")
+			.setDesc("Safety check: only delete a local file if all of its references are within the chosen scope (i.e., it is never referenced by notes outside the scope).")
 			.addToggle((t) => {
-				t.setValue(this.opts.deleteOnlyIfUniqueInScope);
+				t.setValue(this.opts.deleteOnlyIfNoExternalRefs);
 				t.setDisabled(!this.opts.deleteOriginal);
-				t.onChange((v) => (this.opts.deleteOnlyIfUniqueInScope = v));
+				t.onChange((v) => (this.opts.deleteOnlyIfNoExternalRefs = v));
 			});
 
 		new Setting(contentEl)
