@@ -126,7 +126,7 @@ export default class ObsidianS3 extends Plugin {
 			new Notice(`[${id}] Found ${doDelete.length} un-used objects, deleting...`);
 			for (let y = 0; y < doDelete.length; y++) {
 				console.log(`[${id}] S3: Deleting ${doDelete[y].name}`);
-				await this.s3.removeObject(doDelete[y].name);
+				await s3.removeObject(doDelete[y].name);
 			}
 			new Notice(`[${id}] Deleted ${doDelete.length} objects.`);
 			new Notice(`[${id}] Current bucket size ${prettyBytes(await s3.getBucketSize())}`);
