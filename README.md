@@ -80,10 +80,14 @@ Notes:
 - If you keep the bucket private, the plugin can still fetch objects using credentials via its local proxy URLs (e.g. `http://localhost:4998/...`).
 
 ## Feature list
-Supported files (limited by files allowed to be linked by Obsidian): 
-- images (.ico, .png, .jpg, .gif).
-- videos (.mp4).
-- audio (.mp3, .wav).
+Supported files (limited by files allowed to be linked by Obsidian). By default, this plugin supports:
+
+- Images: `.ico`, `.png`, `.jpg`/`.jpeg`, `.gif`, `.svg`
+- Audio: `.mp3`, `.wav`
+- Video: `.mp4`, `.webm`
+- Documents/archives (as links): `.pdf`, `.zip`, `.doc`
+
+You can customize this list in the plugin settings under **Allowed MIME Types**.
 ### Upload
 - [x] Upload on paste.
 - [x] Upload on drag-n-drop.
@@ -100,7 +104,7 @@ Supported files (limited by files allowed to be linked by Obsidian):
 - [ ] Rename links on port/foldername changes.
 
 ### Unplanned
-- [x] Command: upload existing compatible attachments + rewrite links.
+- [ ] Command: upload existing compatible attachments.
 - [ ] Parallel uploads. 
 - [ ] Retry counts and delays.
 - [ ] Upload static html sites.
