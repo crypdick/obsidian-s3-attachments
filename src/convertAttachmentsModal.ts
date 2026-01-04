@@ -173,7 +173,7 @@ export class ConvertAttachmentsModal extends Modal {
 		}
 
 		new Setting(contentEl).addButton((b) => {
-			b.setButtonText(this.opts.dryRun ? "Run dry-run" : "Run conversion");
+			b.setButtonText("Run");
 			b.setCta();
 			b.onClick(async () => {
 				b.setDisabled(true);
